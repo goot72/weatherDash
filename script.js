@@ -1,38 +1,97 @@
-document.getElementById('weatherForm').addEventListener('submit', function(event) {
-    event.preventDefault();
-    
-    const city = document.getElementById('cityInput').value;
-    const apiKey = 'd31baff365b37a440941cfefa6d518fc' ; // Replace with your OpenWeatherMap API key
-    const apiUrl =  `https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API key}`;
-    
-    fetch(apiUrl)
-    .then(response => response.json())
-    .then(data => {
-        if (data.cod === 200) {
-            let forecastHtml = `<h2>${data.city.name}, ${data.city.country}</h2>`;
-            
-            data.list.foreEach(forecast => {
-                const date = new Date(forecast.dt * 1000);
-                const dateString = date.toLocaleDateString();
-                const timeString = date.toLocaleDateString();
-                
-                forecastHtml += `
-                <div class="forecast">
-                <p><strong>${dateString} ${timeString}</strong></p>
-                <p>Temperature: ${forecast.main.temp} °C</p>
-                <p>Weather: ${forecast.weather[0].description}</p>
-                <p>Humidity: ${forecast.main.humidity} %</p>
-                <p>Wind Speed: ${forecast.wind.speed} m/s</p>
+const cityInput = document.querySelector(".city-input");
+const searchButton = document.querySelector(".search-btn");
+const locationButton = document.querySelector(".location-btn");
+const currentWeatherDiv = document.querySelector(".current-weather");
+const weatherCardsDiv = document.querySelector(".weather-cards");
+
+const API_KEY = "c6b23c4b7b17bb575cee4a65aad75913"; 
+
+const createWeatherCard = (cityName, weatherItem, index) => {
+    if(index === 0) { // HTML for the main weather card
+        return `<div class="details">
+                    <h2>${cityName} (${weatherItem.dt_txt.split(" ")[0]})</h2>
+                    <h6>Temperature: ${(weatherItem.main.temp - 273.15). toFixed(2)}°C</h6>
+                    <h6>Wind: ${weatherItem.wind.speed} M/S</h6>
+                    <h6>Humidity: ${weatherItem.main.humidity}%</h6>
                 </div>
-                `;
-            });
-            document.getElementById('weatherResult').innerHTML = forecastHtml;
-        } else {
-            document.getElementById('weatherResult').innerHTML = '<p>City not found. Please try again.</p>';
-        }
-    })
-    .catch(error => {
-        console.error('Error fetching weather data:', error);
-        document.getElementById('weatherResult').innerHTML = '<p>Something went wrong. Please try again later.</p>';
+                <div class="icon">
+                    <img src="https://openweathermap.org/img/wn/${weatherItem.weather[0].icon}@4x.png" alt="weather-icon">
+                    <h6>${weatherItem.weather[0].description}</h6>
+                </div>`;
+    } else { // HTML for the other five day forecast card
+        return `<li class="card">
+                    <h3>(${weatherItem.dt_txt.split(" ")[0]})</h3>
+                    <img src="https://openweathermap.org/img/wn/${weatherItem.weather[0].icon}@4x.png" alt="weather-icon">
+                    <h6>Temp: ${(weatherItem.main.temp - 273.15).toFixed(2)}°C</h6>
+                    <h6>Wind: ${weatherItem.wind.speed} M/S</h6>
+                    <h6>Humidity: ${weatherItem.main.humidity}%</h6>
+                </li>`;
+    }
+}
+
+const getWeatherDetails = (cityName, latitude, longitude) => {
+    const WEATHER_API_URL = `https://api.openweathermap.org/data/2.5/forecast?lat=${latitude}&lon=${longitude}&appid=${API_KEY}`;
+    
+    fetch(WEATHER_API_URL).then(response => response.json()).then(data => {
+        // Filter the forecasts to get only one forecast per day
+        const uniqueForecastDays = [];
+        const fiveDaysForecast = data.list.filter(forecast => {
+            const forecastDate = new Date(forecast.dt_txt).getDate();
+            if (!uniqueForecastDays.includes(forecastDate)) {
+                return uniqueForecastDays.push(forecastDate);
+            }
+        });
+        
+        // Clearing previous weather data
+        cityInput.value = "";
+        currentWeatherDiv.innerHTML = "";
+        weatherCardsDiv.innerHTML = "";
+        
+        // Creating weather cards and adding them to the DOM
+        fiveDaysForecast.forEach((weatherItem, index) => {
+            const html = createWeatherCard(cityName, weatherItem, index);
+            if (index === 0) {
+                currentWeatherDiv.insertAdjacentHTML("beforeend", html);
+            } else {
+                weatherCardsDiv.insertAdjacentHTML("beforeend", html);
+            }
+        });        
+    }).catch(() => {
+        alert("An error occurred while fetching the weather forecast!");
     });
-});
+}
+
+const getCityCoordinates = () => {
+    const cityName = cityInput.value.trim();
+    if (cityName === "") return;
+    const API_URL = `https://api.openweathermap.org/geo/1.0/direct?q=${cityName}&limit=1&appid=${API_KEY}`;
+    
+    // Get entered city coordinates (latitude, longitude, and name) from the API response
+    fetch(API_URL).then(response => response.json()).then(data => {
+        if (!data.length) return alert(`No coordinates found for ${cityName}`);
+        const { lat, lon, name } = data[0];
+        getWeatherDetails(name, lat, lon);
+    }).catch(() => {
+        alert("An error occurred while fetching the coordinates!");
+    });
+}
+
+const getUserCoordinates = () => {
+    navigator.geolocation.getCurrentPosition(
+        position => {
+            const { latitude, longitude } = position.coords; // Get coordinates of user location
+            // Get city name from coordinates using reverse geocoding API
+            const API_URL = `https://api.openweathermap.org/geo/1.0/reverse?lat=${latitude}&lon=${longitude}&limit=1&appid=${API_KEY}`;
+            fetch(API_URL).then(response => response.json()).then(data => {
+                const { name } = data[0];
+                getWeatherDetails(name, latitude, longitude);
+            }).catch(() => {
+                alert("An error occurred while fetching the city name!");
+            });
+        },
+    );
+}
+
+
+searchButton.addEventListener("click", getCityCoordinates);
+cityInput.addEventListener("keyup", e => e.key === "Enter" && getCityCoordinates());
