@@ -94,4 +94,8 @@ const getUserCoordinates = () => {
 
 
 searchButton.addEventListener("click", getCityCoordinates);
+
+
+localStorage.setItem("search", searchButton.value);
+console.log(localStorage);
 cityInput.addEventListener("keyup", e => e.key === "Enter" && getCityCoordinates());
